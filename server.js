@@ -27,6 +27,11 @@ const mongo = new MongoHelper(url, database)
 mongo.getDatabase()
 
 // --------------------------------------------------------------------------------
+// ModbusRTU
+const ModbusHelper = require("./ModbusHelper")
+const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
+
+// --------------------------------------------------------------------------------
 const static = require("./databaseTemplate")
 
 app.get("/api/status", (req, res) => {
@@ -120,14 +125,21 @@ io.on("connection", async (socket) => {
         socket.broadcast.emit("updateModule", data)
     })
 
-    socket.on("updateModField", (data) => {
-        const {modId, codename, value} = data
+    socket.on("updateModField", async (data) => {
+        const {modId, modAddress, modType, codename, value} = data
 
-        mongo.updateOne("modValues", { modId: ObjectID(modId) }, {
+        await mongo.updateOne("modValues", { modId: ObjectID(modId) }, {
             [codename]: value
         })
 
         mongo.updateLastModified("modValues")
+
+        var modValues = await mongo.find("modValues", { modId: ObjectID(modId) })
+        // console.log("modType", modType)
+        // console.log("modAddress", modAddress)
+        modValues = modValues[0]
+
+        modbus.applyValues(modType, modAddress, modValues, false)
 
         socket.broadcast.emit("updateModField", data)
     })
@@ -142,11 +154,37 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("deletePreset", ({_id}) => {
-        console.log("delete Preset")
-
         mongo.deleteOne("presets", { _id: ObjectID(_id) })
         mongo.updateLastModified("presets")
 
         socket.broadcast.emit("removed", { fieldName: "presets", _id: _id })
+    })
+
+    socket.on("applyPreset", async ({presetId, modules}) => {
+        const preset = await mongo.find("presets", {_id: ObjectID(presetId)})
+        const { values } = preset[0]
+
+        modules.forEach(async (modId) => {
+            mongo.updateOne("modValues", { modId: ObjectID(modId) }, values)
+            const modbusModule = await mongo.find("modules", {_id: ObjectID(modId)})
+            // var modFields = await mongo.find("modFields", { codename: { $in: Object.keys(values) } })
+            // modFields = modFields.map((field) => ({ [field.codename]: field }))
+
+            const { modAddress, modType } = modbusModule[0]
+            var registers = 
+            // var modbusValues = Object.keys(values).reduce((prev, valueKey) => [
+            //     ...prev, {
+            //         fieldAddress: modFields[valueKey].fieldAddress,
+            //         fieldValues: values[valueKey]
+            //     }
+            // ])
+
+            modbus.applyValues(modType, modAddress, values, true)
+
+            io.emit("updateMultipleModFields", {
+                modId: modId,
+                values: values
+            })
+        })
     })
 })
