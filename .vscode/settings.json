@@ -5,6 +5,7 @@
     "package-lock.json": true,
     ".gitignore": true,
     "README.md": true,
-    "package.json": true
+    "package.json": true,
+    "remotedev.js": true
   }
 }

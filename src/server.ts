@@ -1,10 +1,12 @@
-const express = require("express")
-const http = require("http")
-const socketio = require("socket.io")
-const { ObjectID } = require("mongodb")
+import express from "express"
+import { Server } from "http"
+import socketio from "socket.io"
+import { ObjectID } from "mongodb"
+
+import ModValues from "./types/ModValues"
 
 const app = express()
-const server = http.Server(app);
+const server = new Server(app)
 const io = socketio(server, {
     pingTimeout: 30000,
     pingInterval: 30000
@@ -21,34 +23,34 @@ server.listen(3000, function () {
 const url = "mongodb://localhost:27017"
 const database = "leds"
 
-const MongoHelper = require("./MongoHelper")
+import MongoHelper from "./MongoHelper"
 const mongo = new MongoHelper(url, database)
 
 mongo.getDatabase()
 
 // --------------------------------------------------------------------------------
 // ModbusRTU
-const ModbusHelper = require("./ModbusHelper")
-const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
+// import ModbusHelper from "./ModbusHelper"
+// const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
 
 // --------------------------------------------------------------------------------
-const static = require("./databaseTemplate")
+// import databaseTemplate from "./databaseTemplate"
 
-app.get("/api/status", (req, res) => {
-    res.send({
-        status: "ok"
-    })
-})
+// app.get("/api/status", (req, res) => {
+//     res.send({
+//         status: "ok"
+//     })
+// })
 
-app.get("/api/lastModified", (req, res) => {
-    res.send({
-        lastModified: static[req.query.fieldName].lastModified
-    })
-})
+// app.get("/api/lastModified", (req, res) => {
+//     res.send({
+//         lastModified: databaseTemplate[req.query.fieldName].lastModified
+//     })
+// })
 
-app.get("/api/getField", (req, res) => {
-    res.send(static[req.query.fieldName][req.query.fieldName])
-})
+// app.get("/api/getField", (req, res) => {
+//     res.send(databaseTemplate[req.query.fieldName][req.query.fieldName])
+// })
 
 // --------------------------------------------------------------------------------
 io.on("connection", async (socket) => {
@@ -76,12 +78,12 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("addModule", async (data) => {
-        var doc = await mongo.insertOne("modules", { ...data })
-        doc = doc.ops[0]
+        var docs = await mongo.insertOne("modules", { ...data })
+        const doc = docs.ops[0]
         // doc.modId = doc._id
         // doc._id = undefined
 
-        var values = { modId: doc._id }
+        var values: ModValues = new ModValues(doc._id as ObjectID)
         var modType = await mongo.find("modTypes", { codename: data.modType })
 
         var fields = modType[0].fields
@@ -90,10 +92,10 @@ io.on("connection", async (socket) => {
             var modField = await mongo.find("modFields", { codename: fields[i] })            
             var { codename, defaultValue } = modField[0]
             
-            values[codename] = defaultValue
+            values.addValue(codename, defaultValue)
         }
 
-        mongo.insertOne("modValues", values)
+        mongo.insertOne("modValues", values.getObject())
 
         mongo.updateLastModified("modValues")
         mongo.updateLastModified("modules")
@@ -103,8 +105,8 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("deleteModule", ({modId}) => {
-        mongo.deleteOne("modules", { _id: ObjectID(modId) })
-        mongo.deleteOne("modValues", { modId: ObjectID(modId) })
+        mongo.deleteOne("modules", { _id: new ObjectID(modId) })
+        mongo.deleteOne("modValues", { modId: new ObjectID(modId) })
 
         mongo.updateLastModified("modValues")
         mongo.updateLastModified("modules")
@@ -115,7 +117,7 @@ io.on("connection", async (socket) => {
     socket.on("updateModule", (data) => {
         const {modId, modAddress, modName} = data
 
-        mongo.updateOne("modules", { _id: ObjectID(modId) }, {
+        mongo.updateOne("modules", { _id: new ObjectID(modId) }, {
             modAddress: modAddress,
             modName: modName 
         })
@@ -128,18 +130,18 @@ io.on("connection", async (socket) => {
     socket.on("updateModField", async (data) => {
         const {modId, modAddress, modType, codename, value} = data
 
-        await mongo.updateOne("modValues", { modId: ObjectID(modId) }, {
+        await mongo.updateOne("modValues", { modId: new ObjectID(modId) }, {
             [codename]: value
         })
 
         mongo.updateLastModified("modValues")
 
-        var modValues = await mongo.find("modValues", { modId: ObjectID(modId) })
+        var modValues = await mongo.find("modValues", { modId: new ObjectID(modId) })
         // console.log("modType", modType)
         // console.log("modAddress", modAddress)
         modValues = modValues[0]
 
-        modbus.applyValues(modType, modAddress, modValues, false)
+        // modbus.applyValues(modType, modAddress, modValues, false)
 
         socket.broadcast.emit("updateModField", data)
     })
@@ -154,19 +156,19 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("deletePreset", ({_id}) => {
-        mongo.deleteOne("presets", { _id: ObjectID(_id) })
+        mongo.deleteOne("presets", { _id: new ObjectID(_id) })
         mongo.updateLastModified("presets")
 
         socket.broadcast.emit("removed", { fieldName: "presets", _id: _id })
     })
 
     socket.on("applyPreset", async ({presetId, modules}) => {
-        const preset = await mongo.find("presets", {_id: ObjectID(presetId)})
+        const preset = await mongo.find("presets", {_id: new ObjectID(presetId)})
         const { values } = preset[0]
 
-        modules.forEach(async (modId) => {
-            mongo.updateOne("modValues", { modId: ObjectID(modId) }, values)
-            const modbusModule = await mongo.find("modules", {_id: ObjectID(modId)})
+        modules.forEach(async (modId: string) => {
+            mongo.updateOne("modValues", { modId: new ObjectID(modId) }, values)
+            const modbusModule = await mongo.find("modules", {_id: new ObjectID(modId)})
             // var modFields = await mongo.find("modFields", { codename: { $in: Object.keys(values) } })
             // modFields = modFields.map((field) => ({ [field.codename]: field }))
 
@@ -179,7 +181,7 @@ io.on("connection", async (socket) => {
             //     }
             // ])
 
-            modbus.applyValues(modType, modAddress, values, true)
+            // modbus.applyValues(modType, modAddress, values, true)
 
             io.emit("updateMultipleModFields", {
                 modId: modId,

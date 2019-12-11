@@ -10,13 +10,13 @@
  * @return  {Array}           The RGB representation
  */
 
-function hslToRgb(h, s, l) {
+export function hslToRgb(h: number, s: number, l: number): number[] {
     var r, g, b;
 
     if(s == 0){
         r = g = b = l; // achromatic
     }else{
-        var hue2rgb = function hue2rgb(p, q, t){
+        var hue2rgb = function hue2rgb(p: number, q: number, t: number){
             if(t < 0) t += 1;
             if(t > 1) t -= 1;
             if(t < 1/6) return p + (q - p) * 6 * t;
@@ -35,11 +35,6 @@ function hslToRgb(h, s, l) {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-function sleep(time) {
-    return new Promise(resolve => setTimeout(resolve, time))
-}
-
-module.exports = {
-    hslToRgb: hslToRgb,
-    sleep: sleep
-}
+// function sleep(time) {
+//     return new Promise(resolve => setTimeout(resolve, time))
+// }

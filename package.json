@@ -4,18 +4,23 @@
   "description": "Node-based server for Leds project",
   "main": "server.js",
   "dependencies": {
+    "@types/express": "^4.17.2",
+    "@types/mongodb": "^3.3.12",
+    "@types/socket.io": "^2.1.4",
     "express": "^4.17.1",
-    "express-ws": "^4.0.0",
-    "modbus-serial": "^7.7.3",
+    "modbus.ts": "^3.1.41",
     "mongodb": "^3.3.3",
     "remotedev-server": "^0.3.1",
-    "serialport": "^8.0.5",
-    "socketio": "^1.0.0"
+    "socketio": "^1.0.0",
+    "ts-node-dev": "^1.0.0-pre.44",
+    "typescript": "^3.7.3"
   },
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "tsc": "tsc",
+    "dev": "ts-node-dev --respawn --transpileOnly ./build/server.js",
+    "prod": "tsc && node ./build/build.js ./server.js"
   },
   "repository": {
     "type": "git",

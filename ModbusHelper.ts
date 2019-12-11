@@ -1,13 +1,13 @@
-const ModbusRTU = require("modbus-serial");
-const modules = require("./modules/modules")
+// import ModbusRTU from "modbus-serial"
+const modules = require("../modules/modules")
 
 module.exports = class ModbusHelper {
     constructor(port, baud) {
-        this.client = new ModbusRTU();
+        // this.client = new ModbusRTU();
 
-        this.client.connectRTUBuffered(port, {
-            baudRate: baud
-        })
+        // this.client.connectRTUBuffered(port, {
+        //     baudRate: baud
+        // })
     }
 
     /**
@@ -20,9 +20,9 @@ module.exports = class ModbusHelper {
      * @param {*} preset Applying preset or not
      */
     applyValues(modType, modAddress, values, preset) {
-        const mod = modules[modType]
+        // const mod = modules[modType]
 
-        this.client.setID(modAddress)
-        mod.writeValues(this.client, values, preset)
+        // this.client.setID(modAddress)
+        // mod.writeValues(this.client, values, preset)
     }
 }

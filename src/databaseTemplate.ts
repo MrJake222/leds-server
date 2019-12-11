@@ -1,4 +1,4 @@
-module.exports = {
+const databaseTemplate = {
     modFields: [
         {
             name: "Hue",
@@ -34,10 +34,12 @@ module.exports = {
     ],
 
     lastModified: [
-        { fieldName: "modules", lastModified: null },
-        { fieldName: "modFields", lastModified: null },
-        { fieldName: "modTypes", lastModified: null },
-        { fieldName: "modValues", lastModified: null },
-        { fieldName: "presets", lastModified: null }
+        { fieldName: "modules", lastModified: "" },
+        { fieldName: "modFields", lastModified: "" },
+        { fieldName: "modTypes", lastModified: "" },
+        { fieldName: "modValues", lastModified: "" },
+        { fieldName: "presets", lastModified: "" }
     ]
 }
+
+export default databaseTemplate
