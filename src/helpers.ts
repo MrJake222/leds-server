@@ -35,6 +35,11 @@ export function hslToRgb(h: number, s: number, l: number): number[] {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-// function sleep(time) {
-//     return new Promise(resolve => setTimeout(resolve, time))
-// }
+export function sleep(time: number, reason: string | undefined = undefined) {
+    return new Promise((resolve, reject) => {
+        if (reason)
+            setTimeout(() => reject(reason), time)
+        else
+            setTimeout(resolve, time)
+    })
+}

@@ -30,8 +30,9 @@ mongo.getDatabase()
 
 // --------------------------------------------------------------------------------
 // ModbusRTU
-// import ModbusHelper from "./ModbusHelper"
-// const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
+import ModbusHelper from "./modbus/ModbusHelper"
+import ModbusRequest from "./modbus/ModbusRequest"
+const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
 
 // --------------------------------------------------------------------------------
 // import databaseTemplate from "./databaseTemplate"
@@ -136,12 +137,18 @@ io.on("connection", async (socket) => {
 
         mongo.updateLastModified("modValues")
 
-        var modValues = await mongo.find("modValues", { modId: new ObjectID(modId) })
+        var modValuess = await mongo.find("modValues", { modId: new ObjectID(modId) })
         // console.log("modType", modType)
         // console.log("modAddress", modAddress)
-        modValues = modValues[0]
+        const modValues = modValuess[0]
+
+        delete modValues._id
+        delete modValues.modId
 
         // modbus.applyValues(modType, modAddress, modValues, false)
+        modbus.queue(modbus.getModule(modType).apply(modAddress, modValues, {
+            latch: true
+        }))
 
         socket.broadcast.emit("updateModField", data)
     })
@@ -168,20 +175,19 @@ io.on("connection", async (socket) => {
 
         modules.forEach(async (modId: string) => {
             mongo.updateOne("modValues", { modId: new ObjectID(modId) }, values)
+            
             const modbusModule = await mongo.find("modules", {_id: new ObjectID(modId)})
-            // var modFields = await mongo.find("modFields", { codename: { $in: Object.keys(values) } })
-            // modFields = modFields.map((field) => ({ [field.codename]: field }))
-
             const { modAddress, modType } = modbusModule[0]
-            var registers = 
-            // var modbusValues = Object.keys(values).reduce((prev, valueKey) => [
-            //     ...prev, {
-            //         fieldAddress: modFields[valueKey].fieldAddress,
-            //         fieldValues: values[valueKey]
-            //     }
-            // ])
 
-            // modbus.applyValues(modType, modAddress, values, true)
+            modbus.queue(modbus.getModule(modType).apply(modAddress, values, {
+                time: 500,
+                dim: true
+            }))
+
+            modbus.queue(modbus.getModule(modType).apply(modAddress, values, {
+                time: 500,
+                // dim: true
+            }), 550)
 
             io.emit("updateMultipleModFields", {
                 modId: modId,

@@ -99,6 +99,6 @@ export default class MongoHelper {
     async deleteOne(collection: string, query: object) {
         var db = await this.getDatabase()
 
-        return db.collection(collection).remove(query)
+        return db.collection(collection).deleteOne(query)
     }
 }
