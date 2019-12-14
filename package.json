@@ -13,6 +13,7 @@
     "mongodb": "^3.3.3",
     "remotedev-server": "^0.3.1",
     "socketio": "^1.0.0",
+    "sqlite3": "^4.1.1",
     "ts-node-dev": "^1.0.0-pre.44",
     "typescript": "^3.7.3"
   },

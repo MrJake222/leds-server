@@ -1,4 +1,5 @@
 import { MongoClient } from "mongodb"
+import databaseTemplateGlobal from "./databaseTemplate"
 
 export default class MongoHelper {
     databaseName: string
@@ -26,18 +27,18 @@ export default class MongoHelper {
     }
 
     init() {
-        console.info("Initializing the database...")    
-    
-        var template = require("./databaseTemplate")
-    
-        Object.keys(template).forEach((key) => {
+        console.info("Initializing the database...")  
+        
+        const databaseTemplate: {[key: string]: any} = databaseTemplateGlobal
+        
+        Object.keys(databaseTemplate).forEach((key) => {
             if (key == "lastModified") {
                 const jsonDate = new Date().toJSON()
     
-                template[key].forEach((field: { fieldName: string, lastModified: string }) => field.lastModified = jsonDate)
+                databaseTemplate[key].forEach((field: { fieldName: string, lastModified: string }) => field.lastModified = jsonDate)
             }
     
-            this.insertMany(key, template[key])
+            this.insertMany(key, databaseTemplate[key])
         })
     }
 
