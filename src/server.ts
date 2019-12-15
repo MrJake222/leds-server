@@ -96,6 +96,8 @@ io.on("connection", async (socket) => {
             values.addValue(codename, defaultValue)
         }
 
+        values.addValue("preset", null)
+
         mongo.insertOne("modValues", values.getObject())
 
         mongo.updateLastModified("modValues")
@@ -132,7 +134,8 @@ io.on("connection", async (socket) => {
         const {modId, modAddress, modType, codename, value} = data
 
         await mongo.updateOne("modValues", { modId: new ObjectID(modId) }, {
-            [codename]: value
+            [codename]: value,
+            preset: null
         })
 
         mongo.updateLastModified("modValues")
@@ -140,6 +143,8 @@ io.on("connection", async (socket) => {
         var modValuess = await mongo.find("modValues", { modId: new ObjectID(modId) })
         // console.log("modType", modType)
         // console.log("modAddress", modAddress)
+        // console.log("modId", modId)
+        // console.log("modValuess", modValuess)
         const modValues = modValuess[0]
 
         delete modValues._id

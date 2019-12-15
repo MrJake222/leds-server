@@ -15,8 +15,8 @@ export default class ModTypes {
         })
     }
 
-    getObject(): {[key: string]: string} {
-        var obj: {[key: string]: string} = { modId: this.modId.toHexString() }
+    getObject(): {[key: string]: string | ObjectID} {
+        var obj: {[key: string]: string | ObjectID} = { modId: this.modId }
 
         for (let {codename, defaultValue} of this.values)
             obj[codename] = defaultValue
