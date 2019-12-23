@@ -12,8 +12,6 @@ const io = socketio(server, {
     pingInterval: 30000
 })
 
-// app.use(express.static("static"))
-
 server.listen(3000, function () {
     console.log("Listening...")
 })
@@ -33,25 +31,6 @@ mongo.getDatabase()
 import ModbusHelper from "./modbus/ModbusHelper"
 import ModbusRequest from "./modbus/ModbusRequest"
 const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
-
-// --------------------------------------------------------------------------------
-// import databaseTemplate from "./databaseTemplate"
-
-// app.get("/api/status", (req, res) => {
-//     res.send({
-//         status: "ok"
-//     })
-// })
-
-// app.get("/api/lastModified", (req, res) => {
-//     res.send({
-//         lastModified: databaseTemplate[req.query.fieldName].lastModified
-//     })
-// })
-
-// app.get("/api/getField", (req, res) => {
-//     res.send(databaseTemplate[req.query.fieldName][req.query.fieldName])
-// })
 
 // --------------------------------------------------------------------------------
 io.on("connection", async (socket) => {
@@ -141,16 +120,11 @@ io.on("connection", async (socket) => {
         mongo.updateLastModified("modValues")
 
         var modValuess = await mongo.find("modValues", { modId: new ObjectID(modId) })
-        // console.log("modType", modType)
-        // console.log("modAddress", modAddress)
-        // console.log("modId", modId)
-        // console.log("modValuess", modValuess)
         const modValues = modValuess[0]
 
         delete modValues._id
         delete modValues.modId
 
-        // modbus.applyValues(modType, modAddress, modValues, false)
         modbus.queue(modbus.getModule(modType).apply(modAddress, modValues, {
             latch: true
         }))
@@ -159,10 +133,13 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("addPreset", async (data) => {
-        const output = await mongo.insertOne("presets", {...data})
+        const output = await mongo.insertOne("presets", {...data, builtin: false})
         const docs = output.ops
 
         mongo.updateLastModified("presets")
+
+        mongo.updateOne("modValues", { modId: new ObjectID(data.modId) }, { preset: data.presetName })
+        mongo.updateLastModified("modValues")
 
         io.emit("added", { fieldName: "presets", docs: docs })
     })
@@ -176,27 +153,49 @@ io.on("connection", async (socket) => {
 
     socket.on("applyPreset", async ({presetId, modules}) => {
         const preset = await mongo.find("presets", {_id: new ObjectID(presetId)})
-        const { values } = preset[0]
+        var { presetName, values } = preset[0]
+
+        values.preset = presetName
 
         modules.forEach(async (modId: string) => {
-            mongo.updateOne("modValues", { modId: new ObjectID(modId) }, values)
-            
             const modbusModule = await mongo.find("modules", {_id: new ObjectID(modId)})
             const { modAddress, modType } = modbusModule[0]
 
-            modbus.queue(modbus.getModule(modType).apply(modAddress, values, {
-                time: 500,
-                dim: true
-            }))
+            const modbusModValues = await mongo.find("modValues", {modId: new ObjectID(modId)})
+            const { preset } = modbusModValues[0]
 
-            modbus.queue(modbus.getModule(modType).apply(modAddress, values, {
-                time: 500,
-                // dim: true
-            }), 550)
+            // If the preset is off, fetch appropriate values from ModbusModule
+            if (presetName == "Off") {
+                values = {
+                    ...modbus.getModule(modType).offValues(),
+                    preset: "Off"
+                }
+            }
+
+            mongo.updateOne("modValues", { modId: new ObjectID(modId) }, values)            
+
+            // If the module wasn't off, turn it off first
+            if (preset != "Off") {
+                modbus.queue(modbus.getModule(modType).apply(modAddress, values, {
+                    time: 500,
+                    dim: true
+                }))
+            }
+
+            // If not applying off preset, set the preset on the target device
+            if (presetName != "Off") {
+
+                // If current preset was Off, don't wait for the device to turn off
+                const wait = preset == "Off" ? 0 : 550
+
+                modbus.queue(modbus.getModule(modType).apply(modAddress, values, {
+                    time: 500,
+                }), wait)
+            }
 
             io.emit("updateMultipleModFields", {
                 modId: modId,
-                values: values
+                values: values,
             })
         })
     })

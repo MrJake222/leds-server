@@ -19,6 +19,11 @@ export interface ModbusModuleInterface {
      * @param options Options(see implementation)
      */
     apply(modAddress: number, modValues: { [key: string]: number }, options: { [key: string]: any }): ModbusRequest
+
+    /**
+     * Gets off values to be saved into the database when applying off preset
+     */
+    offValues(): {[key: string]: any}
 }
 
 export class LEDRGB implements ModbusModuleInterface {
@@ -56,5 +61,13 @@ export class LEDRGB implements ModbusModuleInterface {
             functions.push(new ModbusWriteSingleCoil(LEDRGB.COIL_LATCH, true))
         
         return new ModbusRequest(modAddress, functions)
+    }
+
+    offValues() {
+        return {
+            hue: 0,
+            saturation: 0,
+            lightness: 0
+        }
     }
 }

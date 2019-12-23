@@ -33,6 +33,19 @@ const databaseTemplate = {
         }
     ],
 
+    presets: [
+        {
+            presetName: "Off",
+            modType: "LED-RGB",
+            values: {
+                hue: 0,
+                saturation: 0,
+                lightness: 0
+            },
+            builtin: true
+        }
+    ],
+
     lastModified: [
         { fieldName: "modules", lastModified: "" },
         { fieldName: "modFields", lastModified: "" },
