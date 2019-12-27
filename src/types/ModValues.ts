@@ -1,10 +1,8 @@
-import { ObjectID } from "mongodb";
-
 export default class ModTypes {
-    modId: ObjectID
+    modId: string
     values: {codename: string, defaultValue: any}[] = []
 
-    constructor(modId: ObjectID) {
+    constructor(modId: string) {
         this.modId = modId
     }
 
@@ -15,8 +13,8 @@ export default class ModTypes {
         })
     }
 
-    getObject(): {[key: string]: string | ObjectID} {
-        var obj: {[key: string]: string | ObjectID} = { modId: this.modId }
+    getObject(): {[key: string]: string} {
+        var obj: {[key: string]: string} = { modId: this.modId }
 
         for (let {codename, defaultValue} of this.values)
             obj[codename] = defaultValue

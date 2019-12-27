@@ -1,9 +1,10 @@
 import express from "express"
 import { Server } from "http"
 import socketio from "socket.io"
-import { ObjectID } from "mongodb"
+// import { ObjectID } from "mongodb"
 
 import ModValues from "./types/ModValues"
+import Module from "./types/Module"
 
 const app = express()
 const server = new Server(app)
@@ -21,25 +22,25 @@ server.listen(3000, function () {
 const url = "mongodb://localhost:27017"
 const database = "leds"
 
-import MongoHelper from "./MongoHelper"
-const mongo = new MongoHelper(url, database)
+import NedbHelper from "./NedbHelper"
+const nedb = new NedbHelper()
 
-mongo.getDatabase()
+nedb.init()
+// nedb.getDatabase()
 
 // --------------------------------------------------------------------------------
 // ModbusRTU
 import ModbusHelper from "./modbus/ModbusHelper"
-import ModbusRequest from "./modbus/ModbusRequest"
 const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
 
 // --------------------------------------------------------------------------------
 io.on("connection", async (socket) => {
-    socket.emit("init", {
-        lastModified: await mongo.find("lastModified")
+    socket.emit("init", {        
+        lastModified: await nedb.find("lastModified")
     })
 
     socket.on("getAll", async ({ fieldName }) => {
-        var docs = await mongo.find(fieldName)
+        var docs = await nedb.find(fieldName)
 
         socket.emit("added", {
             getAll: true,
@@ -53,23 +54,21 @@ io.on("connection", async (socket) => {
         socket.emit("init", {
             force: true,
 
-            lastModified: await mongo.find("lastModified")
+            lastModified: await nedb.find("lastModified")
         })
     })
 
     socket.on("addModule", async (data) => {
-        var docs = await mongo.insertOne("modules", { ...data })
-        const doc = docs.ops[0]
-        // doc.modId = doc._id
-        // doc._id = undefined
+        const doc = await nedb.insert("modules", { ...data })
+        const moduleObj: Module = doc as Module
 
-        var values: ModValues = new ModValues(doc._id as ObjectID)
-        var modType = await mongo.find("modTypes", { codename: data.modType })
+        var values: ModValues = new ModValues(moduleObj._id)
+        var modType = await nedb.find("modTypes", { codename: data.modType })
 
         var fields = modType[0].fields
 
         for (let i=0; i<fields.length; i++) {
-            var modField = await mongo.find("modFields", { codename: fields[i] })            
+            var modField = await nedb.find("modFields", { codename: fields[i] })            
             var { codename, defaultValue } = modField[0]
             
             values.addValue(codename, defaultValue)
@@ -77,21 +76,21 @@ io.on("connection", async (socket) => {
 
         values.addValue("preset", null)
 
-        mongo.insertOne("modValues", values.getObject())
+        nedb.insert("modValues", values.getObject())
 
-        mongo.updateLastModified("modValues")
-        mongo.updateLastModified("modules")
+        nedb.updateLastModified("modValues")
+        nedb.updateLastModified("modules")
 
         io.emit("added", { fieldName: "modValues", docs: [values] })
-        io.emit("added", { fieldName: "modules", docs: [doc] })
+        io.emit("added", { fieldName: "modules", docs: [moduleObj] })
     })
 
     socket.on("deleteModule", ({modId}) => {
-        mongo.deleteOne("modules", { _id: new ObjectID(modId) })
-        mongo.deleteOne("modValues", { modId: new ObjectID(modId) })
+        nedb.delete("modules", { _id: modId })
+        nedb.delete("modValues", { modId: modId })
 
-        mongo.updateLastModified("modValues")
-        mongo.updateLastModified("modules")
+        nedb.updateLastModified("modValues")
+        nedb.updateLastModified("modules")
 
         socket.broadcast.emit("removed", { fieldName: "modules", _id: modId })
     })
@@ -99,12 +98,12 @@ io.on("connection", async (socket) => {
     socket.on("updateModule", (data) => {
         const {modId, modAddress, modName} = data
 
-        mongo.updateOne("modules", { _id: new ObjectID(modId) }, {
+        nedb.update("modules", { _id: modId }, {
             modAddress: modAddress,
             modName: modName 
         })
 
-        mongo.updateLastModified("modules")
+        nedb.updateLastModified("modules")
 
         socket.broadcast.emit("updateModule", data)
     })
@@ -112,14 +111,14 @@ io.on("connection", async (socket) => {
     socket.on("updateModField", async (data) => {
         const {modId, modAddress, modType, codename, value} = data
 
-        await mongo.updateOne("modValues", { modId: new ObjectID(modId) }, {
+        await nedb.update("modValues", { modId: modId }, {
             [codename]: value,
             preset: null
         })
 
-        mongo.updateLastModified("modValues")
+        nedb.updateLastModified("modValues")
 
-        var modValuess = await mongo.find("modValues", { modId: new ObjectID(modId) })
+        var modValuess = await nedb.find("modValues", { modId: modId })
         const modValues = modValuess[0]
 
         delete modValues._id
@@ -133,35 +132,34 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("addPreset", async (data) => {
-        const output = await mongo.insertOne("presets", {...data, builtin: false})
-        const docs = output.ops
+        const doc = await nedb.insert("presets", {...data, builtin: false})
 
-        mongo.updateLastModified("presets")
+        nedb.updateLastModified("presets")
 
-        mongo.updateOne("modValues", { modId: new ObjectID(data.modId) }, { preset: data.presetName })
-        mongo.updateLastModified("modValues")
+        nedb.update("modValues", { modId: data.modId }, { preset: data.presetName })
+        nedb.updateLastModified("modValues")
 
-        io.emit("added", { fieldName: "presets", docs: docs })
+        io.emit("added", { fieldName: "presets", docs: [doc] })
     })
 
     socket.on("deletePreset", ({_id}) => {
-        mongo.deleteOne("presets", { _id: new ObjectID(_id) })
-        mongo.updateLastModified("presets")
+        nedb.delete("presets", { _id: _id })
+        nedb.updateLastModified("presets")
 
         socket.broadcast.emit("removed", { fieldName: "presets", _id: _id })
     })
 
     socket.on("applyPreset", async ({presetId, modules}) => {
-        const preset = await mongo.find("presets", {_id: new ObjectID(presetId)})
+        const preset = await nedb.find("presets", {_id: presetId})
         var { presetName, values } = preset[0]
 
         values.preset = presetName
 
         modules.forEach(async (modId: string) => {
-            const modbusModule = await mongo.find("modules", {_id: new ObjectID(modId)})
+            const modbusModule = await nedb.find("modules", {_id: modId})
             const { modAddress, modType } = modbusModule[0]
 
-            const modbusModValues = await mongo.find("modValues", {modId: new ObjectID(modId)})
+            const modbusModValues = await nedb.find("modValues", {modId: modId})
             const { preset } = modbusModValues[0]
 
             // If the preset is off, fetch appropriate values from ModbusModule
@@ -172,7 +170,7 @@ io.on("connection", async (socket) => {
                 }
             }
 
-            mongo.updateOne("modValues", { modId: new ObjectID(modId) }, values)            
+            nedb.update("modValues", { modId: modId }, values)            
 
             // If the module wasn't off, turn it off first
             if (preset != "Off") {
