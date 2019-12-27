@@ -1,7 +1,7 @@
 import express from "express"
 import { Server } from "http"
 import socketio from "socket.io"
-// import { ObjectID } from "mongodb"
+import config from "./config"
 
 import ModValues from "./types/ModValues"
 import Module from "./types/Module"
@@ -31,7 +31,7 @@ nedb.init()
 // --------------------------------------------------------------------------------
 // ModbusRTU
 import ModbusHelper from "./modbus/ModbusHelper"
-const modbus = new ModbusHelper("/dev/ttyUSB0", 57600)
+const modbus = new ModbusHelper(config.port, config.baud)
 
 // --------------------------------------------------------------------------------
 io.on("connection", async (socket) => {
