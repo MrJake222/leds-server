@@ -1,7 +1,7 @@
 import express from "express"
 import { Server } from "http"
 import socketio from "socket.io"
-import config from "./config"
+import config from "./config.json"
 
 import ModValues from "./types/ModValues"
 import Module from "./types/Module"
