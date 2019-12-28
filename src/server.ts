@@ -31,15 +31,15 @@ nedb.init()
 // ModbusRTU
 import ModbusHelper from "./modbus/ModbusHelper"
 import ModbusRequest from "./modbus/ModbusRequest.js";
-import { ModbusReadHoldingRegisters } from "./modbus/ModbusFunctions.js";
-import { REGISTER_MODULE_TYPE } from "./modbus/ModbusModules.js";
+import { ModbusReadHoldingRegisters, ModbusWriteSingleRegister } from "./modbus/ModbusFunctions.js";
+import { REGISTER_MODULE_TYPE, REGISTER_ADDRESS } from "./modbus/ModbusModules.js";
 import { ReadRegisterResult } from "modbus-serial/ModbusRTU";
 
 const modbus = new ModbusHelper(config.port, config.baud, getModType)
 
 // --------------------------------------------------------------------------------
 io.on("connection", async (socket) => {
-    socket.emit("init", {        
+    socket.emit("init", {
         lastModified: await nedb.find("lastModified")
     })
 
@@ -51,7 +51,7 @@ io.on("connection", async (socket) => {
             case "modules":
                 docs = (docs as Module[]).sort((a, b) => a.modAddress - b.modAddress)
                 break
-            
+
             case "presets":
                 docs = (docs as Preset[]).sort((a, b) => a.timestamp - b.timestamp)
                 break
@@ -86,12 +86,12 @@ io.on("connection", async (socket) => {
 
             // Add module to database
             const moduleObj = await nedb.insertOne<Module>("modules", { ...data, modType: modType.codename })
-            const values: {[key: string]: any} = {}
+            const values: { [key: string]: any } = {}
 
             // Add required modValues here. Do not use forEach, as it
             // creates another level of async functions
-            for (let i=0; i<modType.fields.length; i++) {
-                var { codename, defaultValue } = await nedb.findFirst<ModField>("modFields", { codename: modType.fields[i] })            
+            for (let i = 0; i < modType.fields.length; i++) {
+                var { codename, defaultValue } = await nedb.findFirst<ModField>("modFields", { codename: modType.fields[i] })
 
                 values[codename] = defaultValue
             }
@@ -120,7 +120,7 @@ io.on("connection", async (socket) => {
         }
     })
 
-    socket.on("deleteModule", ({modId}) => {
+    socket.on("deleteModule", ({ modId }) => {
         nedb.delete("modules", { _id: modId })
         nedb.delete("modValues", { modId: modId })
 
@@ -130,21 +130,51 @@ io.on("connection", async (socket) => {
         socket.broadcast.emit("removed", { fieldName: "modules", _id: modId })
     })
 
-    socket.on("updateModule", (data) => {
-        const {modId, modAddress, modName} = data
+    socket.on("updateModuleName", (data) => {
+        const { modId, modName } = data
 
         nedb.update("modules", { _id: modId }, {
-            modAddress: modAddress,
-            modName: modName 
+            modName: modName
         })
 
         nedb.updateLastModified("modules")
 
-        socket.broadcast.emit("updateModule", data)
+        socket.broadcast.emit("updateModuleName", data)
+    })
+
+    socket.on("updateModuleAddress", async (data) => {
+        const { modId, newModAddress } = data
+        const { modAddress } = await nedb.findFirst<Module>("modules", { _id: modId })
+
+        try {
+            await modbus.queue(new ModbusRequest(modAddress, [new ModbusWriteSingleRegister(REGISTER_ADDRESS, newModAddress)]))
+
+            nedb.update("modules", { _id: modId }, {
+                modAddress: newModAddress
+            })
+
+            nedb.updateLastModified("modules")
+
+            io.emit("updateModuleAddress", data)
+        }
+
+        catch (reason) {
+            if (reason == "timeout") {
+                io.emit("updateModuleAddressFailed", {
+                    reason: "timeout"
+                })
+            }
+
+            else {
+                io.emit("updateModuleAddressFailed", {
+                    reason: "other"
+                })
+            }
+        }
     })
 
     socket.on("updateModField", async (data) => {
-        const {modId, modAddress, modType, codename, value} = data
+        const { modId, modAddress, modType, codename, value } = data
 
         await nedb.update("modValues", { modId: modId }, {
             [codename]: value,
@@ -166,7 +196,7 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("addPreset", async (data) => {
-        const doc = await nedb.insert("presets", {...data, builtin: false, timestamp: Date.now()})
+        const doc = await nedb.insert("presets", { ...data, builtin: false, timestamp: Date.now() })
 
         nedb.updateLastModified("presets")
 
@@ -176,21 +206,21 @@ io.on("connection", async (socket) => {
         io.emit("added", { fieldName: "presets", docs: [doc] })
     })
 
-    socket.on("deletePreset", ({_id}) => {
+    socket.on("deletePreset", ({ _id }) => {
         nedb.delete("presets", { _id: _id })
         nedb.updateLastModified("presets")
 
         socket.broadcast.emit("removed", { fieldName: "presets", _id: _id })
     })
 
-    socket.on("applyPreset", async ({presetId, modules}) => {
-        let { presetName, values } = await nedb.findFirst<Preset>("presets", {_id: presetId})
+    socket.on("applyPreset", async ({ presetId, modules }) => {
+        let { presetName, values } = await nedb.findFirst<Preset>("presets", { _id: presetId })
         values.preset = presetName
 
         modules.forEach(async (modId: string) => {
-            const { modAddress, modType } = await nedb.findFirst<Module>("modules", {_id: modId})
+            const { modAddress, modType } = await nedb.findFirst<Module>("modules", { _id: modId })
 
-            const { preset } = await nedb.findFirst<ModValues>("modValues", {modId: modId})
+            const { preset } = await nedb.findFirst<ModValues>("modValues", { modId: modId })
 
             // If the preset is off, fetch appropriate values from ModbusModule
             if (presetName == "Off") {
@@ -200,7 +230,7 @@ io.on("connection", async (socket) => {
                 }
             }
 
-            nedb.update("modValues", { modId: modId }, values)            
+            nedb.update("modValues", { modId: modId }, values)
 
             // If the module wasn't off, turn it off first
             if (preset != "Off") {
@@ -230,7 +260,7 @@ io.on("connection", async (socket) => {
 })
 
 async function getModType() {
-    
+
 }
 
 // getModType()
