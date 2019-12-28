@@ -42,6 +42,17 @@ io.on("connection", async (socket) => {
     socket.on("getAll", async ({ fieldName }) => {
         var docs = await nedb.find(fieldName)
 
+        // Sorting
+        switch (fieldName) {
+            case "modules":
+                docs = docs.sort((a, b) => a.modAddress - b.modAddress)
+                break
+            
+            case "presets":
+                docs = docs.sort((a, b) => a.timestamp - b.timestamp)
+                break
+        }
+
         socket.emit("added", {
             getAll: true,
 
@@ -132,7 +143,7 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("addPreset", async (data) => {
-        const doc = await nedb.insert("presets", {...data, builtin: false})
+        const doc = await nedb.insert("presets", {...data, builtin: false, timestamp: Date.now()})
 
         nedb.updateLastModified("presets")
 

@@ -42,7 +42,8 @@ const databaseTemplate = {
                 saturation: 0,
                 lightness: 0
             },
-            builtin: true
+            builtin: true,
+            timestamp: 0
         }
     ],
 
