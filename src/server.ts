@@ -3,8 +3,7 @@ import { Server } from "http"
 import socketio from "socket.io"
 import config from "./config.json"
 
-import ModValues from "./types/ModValues"
-import Module from "./types/Module"
+import { ModType, Preset, ModValues, DatastoreField, Module, ModField } from "./types/Fields.js"
 
 const app = express()
 const server = new Server(app)
@@ -31,7 +30,12 @@ nedb.init()
 // --------------------------------------------------------------------------------
 // ModbusRTU
 import ModbusHelper from "./modbus/ModbusHelper"
-const modbus = new ModbusHelper(config.port, config.baud)
+import ModbusRequest from "./modbus/ModbusRequest.js";
+import { ModbusReadHoldingRegisters } from "./modbus/ModbusFunctions.js";
+import { REGISTER_MODULE_TYPE } from "./modbus/ModbusModules.js";
+import { ReadRegisterResult } from "modbus-serial/ModbusRTU";
+
+const modbus = new ModbusHelper(config.port, config.baud, getModType)
 
 // --------------------------------------------------------------------------------
 io.on("connection", async (socket) => {
@@ -40,16 +44,16 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("getAll", async ({ fieldName }) => {
-        var docs = await nedb.find(fieldName)
+        var docs = await nedb.find<DatastoreField>(fieldName)
 
         // Sorting
         switch (fieldName) {
             case "modules":
-                docs = docs.sort((a, b) => a.modAddress - b.modAddress)
+                docs = (docs as Module[]).sort((a, b) => a.modAddress - b.modAddress)
                 break
             
             case "presets":
-                docs = docs.sort((a, b) => a.timestamp - b.timestamp)
+                docs = (docs as Preset[]).sort((a, b) => a.timestamp - b.timestamp)
                 break
         }
 
@@ -70,30 +74,50 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("addModule", async (data) => {
-        const doc = await nedb.insert("modules", { ...data })
-        const moduleObj: Module = doc as Module
+        const { modAddress } = data
 
-        var values: ModValues = new ModValues(moduleObj._id)
-        var modType = await nedb.find("modTypes", { codename: data.modType })
+        try {
+            // Send ReadHoldingRegisters command to given address
+            const result = await modbus.queue(new ModbusRequest(modAddress, [new ModbusReadHoldingRegisters(REGISTER_MODULE_TYPE)]))
+            const moduleType = (result[0] as ReadRegisterResult).data[0]
 
-        var fields = modType[0].fields
+            // Try to read the modType from the database
+            const modType = await nedb.findFirst<ModType>("modTypes", { moduleType: moduleType })
 
-        for (let i=0; i<fields.length; i++) {
-            var modField = await nedb.find("modFields", { codename: fields[i] })            
-            var { codename, defaultValue } = modField[0]
-            
-            values.addValue(codename, defaultValue)
+            // Add module to database
+            const moduleObj = await nedb.insertOne<Module>("modules", { ...data, modType: modType.codename })
+            const values: {[key: string]: any} = {}
+
+            // Add required modValues here. Do not use forEach, as it
+            // creates another level of async functions
+            for (let i=0; i<modType.fields.length; i++) {
+                var { codename, defaultValue } = await nedb.findFirst<ModField>("modFields", { codename: modType.fields[i] })            
+
+                values[codename] = defaultValue
+            }
+
+            const modValues: ModValues = {
+                modId: moduleObj._id,
+                preset: null,
+                ...values
+            }
+
+            nedb.insert("modValues", modValues)
+
+            nedb.updateLastModified("modValues")
+            nedb.updateLastModified("modules")
+
+            io.emit("added", { fieldName: "modValues", docs: [modValues] })
+            io.emit("added", { fieldName: "modules", docs: [moduleObj] })
         }
 
-        values.addValue("preset", null)
-
-        nedb.insert("modValues", values.getObject())
-
-        nedb.updateLastModified("modValues")
-        nedb.updateLastModified("modules")
-
-        io.emit("added", { fieldName: "modValues", docs: [values] })
-        io.emit("added", { fieldName: "modules", docs: [moduleObj] })
+        catch (reason) {
+            if (reason == "timeout") {
+                io.emit("addModuleFailed", {
+                    reason: "timeout"
+                })
+            }
+        }
     })
 
     socket.on("deleteModule", ({modId}) => {
@@ -129,8 +153,7 @@ io.on("connection", async (socket) => {
 
         nedb.updateLastModified("modValues")
 
-        var modValuess = await nedb.find("modValues", { modId: modId })
-        const modValues = modValuess[0]
+        var modValues = await nedb.findFirst<ModValues>("modValues", { modId: modId })
 
         delete modValues._id
         delete modValues.modId
@@ -161,17 +184,13 @@ io.on("connection", async (socket) => {
     })
 
     socket.on("applyPreset", async ({presetId, modules}) => {
-        const preset = await nedb.find("presets", {_id: presetId})
-        var { presetName, values } = preset[0]
-
+        let { presetName, values } = await nedb.findFirst<Preset>("presets", {_id: presetId})
         values.preset = presetName
 
         modules.forEach(async (modId: string) => {
-            const modbusModule = await nedb.find("modules", {_id: modId})
-            const { modAddress, modType } = modbusModule[0]
+            const { modAddress, modType } = await nedb.findFirst<Module>("modules", {_id: modId})
 
-            const modbusModValues = await nedb.find("modValues", {modId: modId})
-            const { preset } = modbusModValues[0]
+            const { preset } = await nedb.findFirst<ModValues>("modValues", {modId: modId})
 
             // If the preset is off, fetch appropriate values from ModbusModule
             if (presetName == "Off") {
@@ -209,3 +228,9 @@ io.on("connection", async (socket) => {
         })
     })
 })
+
+async function getModType() {
+    
+}
+
+// getModType()

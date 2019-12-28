@@ -1,5 +1,5 @@
 
-import { ModbusFunctionInterface } from "./ModbusFunctions"
+import { ModbusFunctionInterface, ModbusResult } from "./ModbusFunctions"
 import ModbusRTU from "modbus-serial"
 
 /**
@@ -22,15 +22,18 @@ export default class ModbusRequest {
      * 
      * @param client @see ModbusRTU instance
      */
-    async schedule(client: ModbusRTU): Promise<any> {
+    async schedule(client: ModbusRTU): Promise<ModbusResult[]> {
         var functions = [...this.functions]
+        var results: ModbusResult[] = []
 
         client.setID(this.modAddress)
 
         while (functions.length > 0) {
             const modbusFunction = functions.shift()
 
-            await modbusFunction!.write(client)
+            results.push(await modbusFunction!.write(client))
         }
+
+        return results
     }
 }

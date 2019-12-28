@@ -71,3 +71,5 @@ export class LEDRGB implements ModbusModuleInterface {
         }
     }
 }
+
+export const REGISTER_MODULE_TYPE = 0xFFD2

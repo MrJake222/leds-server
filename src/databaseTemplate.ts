@@ -29,7 +29,8 @@ const databaseTemplate = {
         {
             codename: "LED-RGB",
             fields: ["hue", "saturation", "lightness"],
-            indicatorType: "color"
+            indicatorType: "color",
+            moduleType: 0x0001
         }
     ],
 

@@ -3,33 +3,46 @@ import ModbusRTU from "modbus-serial"
 import { ModbusModuleInterface, LEDRGB } from "./ModbusModules"
 import ModbusRequest from "./ModbusRequest";
 import { sleep } from "../helpers";
-import { ModbusWriteMultipleRegisters } from "./ModbusFunctions";
+import { ModbusWriteMultipleRegisters, ModbusResult } from "./ModbusFunctions";
+
+interface RequestCallback {
+    request: ModbusRequest,
+    resolve: (results: ModbusResult[]) => void
+    reject: (reason: any) => void
+}
 
 export default class ModbusHelper {
     client: ModbusRTU
-    requests: ModbusRequest[] = []
+    requests: RequestCallback[] = []
     pendingRequest: boolean = false
 
-    constructor(port: string, baud: number) {
+    constructor(port: string, baud: number, next: () => void) {
         this.client = new ModbusRTU();
 
         this.client.connectRTUBuffered(port, {
             baudRate: baud
-        })
+        }, next)
     }
 
     getModule(modType: string): ModbusModuleInterface {
         return modules[modType]
     }
 
-    async queue(request: ModbusRequest, wait: number=0): Promise<void> {
+    async queue(request: ModbusRequest, wait: number=0): Promise<ModbusResult[]> {
         if (wait > 0)
             await sleep(wait)
 
-        this.requests.push(request)
+        return new Promise((resolve, reject) => {
+            this.requests.push({
+                request: request,
+                resolve: resolve,
+                reject: reject
+            })
 
-        if (!this.pendingRequest)
-            this.nextRequest()
+            if (!this.pendingRequest)
+                this.nextRequest()
+        })
+        
 
         // console.log("New request, total: " + this.requests.length)
     }
@@ -38,16 +51,20 @@ export default class ModbusHelper {
         this.pendingRequest = true
 
         while (this.requests.length > 0) {
-            const request = this.requests.pop()!
+            const { request, resolve, reject } = this.requests.pop()!
 
             try {
-                await Promise.race([
+                const results = await Promise.race([
                     request.schedule(this.client),
                     sleep(100, "timeout")
                 ])
+
+                resolve(results as ModbusResult[])
             }
 
             catch (reason) {
+                reject(reason)
+
                 if (reason == "timeout")
                     console.warn("\n" + request.modAddress + ": timeout in request: ", request.functions)
 

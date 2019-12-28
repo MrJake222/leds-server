@@ -2,6 +2,8 @@ import fs from "fs"
 import Datastore from "nedb"
 import databaseTemplateGlobal from "./databaseTemplate"
 
+import { DatastoreField } from "./types/Fields"
+
 export type KeyValueAny = {[key: string]: any}
 
 export default class NedbHelper {
@@ -49,17 +51,23 @@ export default class NedbHelper {
         return this.datastores[datastoreName]
     }
 
-    find(datastoreName: string, query = {}): Promise<any[]> {
+    find<Type extends DatastoreField>(datastoreName: string, query = {}): Promise<Type[]> {
         var ds = this.getDatastore(datastoreName)
 
         return new Promise((resolve, reject) => {
-            ds.find(query, {}, (err, docs) => {
+            ds.find(query, {}, (err, docs: {[key: string]: any}[]) => {
                 if (err)
                     reject(err)
 
-                resolve(docs)
+                resolve(docs as Type[])
             })
         })
+    }
+
+    async findFirst<Type extends DatastoreField>(datastoreName: string, query = {}): Promise<Type> {
+        const res = await this.find<Type>(datastoreName, query)
+
+        return res[0]
     }
 
     update(datastoreName: string, query: object, set: object, multi: boolean = false): Promise<number> {
@@ -83,7 +91,7 @@ export default class NedbHelper {
         )
     }
 
-    insert(datastoreName: string, docs: KeyValueAny | KeyValueAny[]): Promise<KeyValueAny | KeyValueAny[]> {
+    insert<Type extends DatastoreField>(datastoreName: string, docs: Type | Type[]): Promise<Type | Type[]> {
         var ds = this.getDatastore(datastoreName)
 
         return new Promise((resolve, reject) => {
@@ -94,6 +102,12 @@ export default class NedbHelper {
                 resolve(docs)
             })
         })
+    }
+
+    async insertOne<Type extends DatastoreField>(datastoreName: string, docs: Type): Promise<Type> {
+        var result = await this.insert(datastoreName, docs)
+
+        return (result as Type)
     }
 
     delete(datastoreName: string, query: object, multi: boolean = false): Promise<number> {
