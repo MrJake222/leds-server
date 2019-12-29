@@ -123,3 +123,5 @@ export default class NedbHelper {
         })
     }
 }
+
+export const nedb = new NedbHelper()

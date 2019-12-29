@@ -16,12 +16,12 @@ export default class ModbusHelper {
     requests: RequestCallback[] = []
     pendingRequest: boolean = false
 
-    constructor(port: string, baud: number, next: () => void) {
+    init(port: string, baud: number) {
         this.client = new ModbusRTU();
 
         this.client.connectRTUBuffered(port, {
             baudRate: baud
-        }, next)
+        })
     }
 
     getModule(modType: string): ModbusModuleInterface {
@@ -99,3 +99,5 @@ export default class ModbusHelper {
 const modules: { [key: string]: ModbusModuleInterface } = {
     "LED-RGB": new LEDRGB()
 }
+
+export const modbus = new ModbusHelper()
