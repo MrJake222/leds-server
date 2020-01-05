@@ -4,7 +4,7 @@ export interface LastModified {
 }
 
 export interface Module {
-    _id: string
+    _id?: string
     modAddress: number
     modName: string
     modType: string
