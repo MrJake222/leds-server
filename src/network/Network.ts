@@ -24,7 +24,7 @@ class Network {
         this.app = app
         this.server = server
 
-        this.io = socketio(this.server, {
+        this.io = new socketio.Server(this.server, {
             pingTimeout: 30000,
             pingInterval: 30000
         })
@@ -101,8 +101,8 @@ class Network {
 
                 var modValues = await nedb.findFirst<ModValues>("modValues", { modId: modId })
 
-                delete modValues._id
-                delete modValues.modId
+                // delete modValues._id
+                // delete modValues.modId
 
                 modbus.queue(modbus.getModule(modType).apply(modAddress, modValues, {
                     latch: true

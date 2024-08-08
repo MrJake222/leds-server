@@ -62,7 +62,7 @@ export default class ModbusHelper {
                 resolve(results as ModbusResult[])
             }
 
-            catch (reason) {
+            catch (reason: any) {
                 reject(reason)
 
                 if (reason == "timeout")
