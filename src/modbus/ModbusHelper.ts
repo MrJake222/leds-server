@@ -63,7 +63,7 @@ export default class ModbusHelper {
             }
 
             catch (reason: any) {
-                reject(reason)
+                // reject(reason)
 
                 if (reason == "timeout")
                     console.warn("\n" + request.modAddress + ": timeout in request: ", request.functions)
