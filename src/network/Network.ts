@@ -26,7 +26,8 @@ class Network {
 
         this.io = new socketio.Server(this.server, {
             pingTimeout: 30000,
-            pingInterval: 30000
+            pingInterval: 30000,
+            allowEIO3: true,
         })
     }
 
